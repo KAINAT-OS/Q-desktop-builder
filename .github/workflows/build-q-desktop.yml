@@ -56,10 +56,15 @@ jobs:
 
       - name: Build Arch Package
         run: |
+          # Create non-root user for makepkg
           useradd builder -m
+
+          # FIX: Grant passwordless sudo so makepkg can install dependencies in CI
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
           chown -R builder:builder .
           su builder -c "cd arch && makepkg -sc --noconfirm"
-          
+
           mkdir -p dist/arch
           mv arch/*.pkg.tar.zst dist/arch/
           cd dist/arch
@@ -70,7 +75,6 @@ jobs:
         with:
           name: arch-dist
           path: dist/arch/
-
   # ------------------------------------------------------------------
   # JOB 3: Deploy to SourceForge
   # ------------------------------------------------------------------
