@@ -1,0 +1,98 @@
+name: Build and Deploy Quintuplet DE (Q Desktop)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # ------------------------------------------------------------------
+  # JOB 1: Build Arch Linux (Blue / Vergil) Package
+  # ------------------------------------------------------------------
+  build-arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Sync Arch Mirror & Toolchain
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git cmake ninja pacman-contrib
+
+      - name: Build PKGBUILD
+        run: |
+          useradd builder -m
+          chown -R builder:builder .
+          su builder -c "cd arch && makepkg -sc --noconfirm"
+
+      - name: Generate Arch Repository DB
+        run: |
+          mkdir -p dist/arch
+          mv arch/*.pkg.tar.zst dist/arch/
+          cd dist/arch
+          repo-add q-desktop.db.tar.gz *.pkg.tar.zst
+
+      - name: Upload Arch Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-dist
+          path: dist/arch/
+
+  # ------------------------------------------------------------------
+  # JOB 2: Build Debian (Red / Dante) Package
+  # ------------------------------------------------------------------
+  build-debian:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Debian Build Chain
+        run: |
+          apt-get update
+          apt-get install -y build-essential devscripts dh-make dpkg-dev apt-utils git cmake ninja-build
+
+      - name: Build Debian Package
+        run: |
+          cd debian
+          dpkg-buildpackage -us -uc -b
+          cd ..
+          mkdir -p dist/debian
+          mv debian-build/*.deb dist/debian/ 2>/dev/null || mv ../*.deb dist/debian/
+
+      - name: Generate Debian Index
+        run: |
+          cd dist/debian
+          dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+
+      - name: Upload Debian Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-dist
+          path: dist/debian/
+
+  # ------------------------------------------------------------------
+  # JOB 3: Deploy Packages to SourceForge
+  # ------------------------------------------------------------------
+  deploy-sourceforge:
+    needs: [build-arch, build-debian]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Built Packages
+        uses: actions/download-artifact@v4
+
+      - name: Configure SSH and Deploy
+        env:
+          SF_KEY: ${{ secrets.SF_SSH_KEY }}
+          SF_USER: ${{ secrets.SF_USERNAME }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SF_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan frs.sourceforge.net >> ~/.ssh/known_hosts
+
+          # Sync both distro channels to your SourceForge project
+          rsync -avP --delete arch-dist/ $SF_USER@frs.sourceforge.net:/home/frs/project/q-desktop/arch/
+          rsync -avP --delete debian-dist/ $SF_USER@frs.sourceforge.net:/home/frs/project/q-desktop/debian/
