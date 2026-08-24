@@ -1,3 +1,19 @@
+#!/bin/bash
+# Quintuplet Desktop (Q Desktop) Meta-Package Generator
+
+echo "🚀 Generating Q Desktop Builder Structure..."
+
+# 1. Clean up old failed attempts
+rm -rf debian/
+
+# 2. Create the required directory structure
+mkdir -p .github/workflows
+mkdir -p arch
+mkdir -p rootfs/usr/share/q-desktop/themes/red
+mkdir -p rootfs/usr/share/q-desktop/themes/blue
+
+# 3. Generate the GitHub Actions CI/CD Pipeline
+cat << 'EOF' > .github/workflows/build-q-desktop.yml
 name: Build and Deploy Quintuplet DE (Q Desktop)
 
 on:
@@ -95,3 +111,38 @@ jobs:
           
           rsync -avP --delete artifacts/arch-dist/ $SF_USER@frs.sourceforge.net:/home/frs/project/q-desktop/arch/
           rsync -avP --delete artifacts/debian-dist/ $SF_USER@frs.sourceforge.net:/home/frs/project/q-desktop/debian/
+EOF
+
+# 4. Generate the Arch Linux PKGBUILD
+cat << 'EOF' > arch/PKGBUILD
+# Maintainer: Kainat Quaderee <kainat@kainatgroup.com>
+pkgname=q-desktop-shell
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Quintuplet Desktop (Q Desktop) Shell Overlays"
+arch=('any')
+url="https://sourceforge.net/projects/q-desktop/"
+license=('GPL')
+depends=('plasma-desktop' 'plasma-workspace' 'kwin')
+
+package() {
+    # Copy the custom Q Desktop files into the Arch package
+    cp -r ../rootfs/* "$pkgdir/"
+    
+    # Inject Q Desktop branding marker for Arch (Blue/Vergil)
+    install -d "$pkgdir/etc/q-desktop"
+    echo "IDENTITY=VERGIL" > "$pkgdir/etc/q-desktop/variant"
+}
+EOF
+
+# 5. Create placeholder files so Git tracks the empty theme folders
+echo "# Q Desktop Red (Dante) Assets" > rootfs/usr/share/q-desktop/themes/red/README.md
+echo "# Q Desktop Blue (Vergil) Assets" > rootfs/usr/share/q-desktop/themes/blue/README.md
+
+# 6. Create Main README
+cat << 'EOF' > README.md
+# Quintuplet Desktop (Q Desktop) Builder
+This repository contains the CI/CD pipeline and meta-packages for Kainat OS.
+EOF
+
+echo "✅ Done! Your Q Desktop Builder structure is ready."

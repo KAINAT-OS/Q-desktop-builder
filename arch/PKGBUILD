@@ -1,32 +1,18 @@
-# PKGBUILD for Quintuplet Desktop (Blue)
+# Maintainer: Kainat Quaderee <kainat@kainatgroup.com>
 pkgname=q-desktop-shell
-pkgver=5.27.11
+pkgver=1.0.0
 pkgrel=1
-pkgdesc="Quintuplet Desktop (Q Desktop) Shell based on KDE Plasma 5.27"
-arch=('x86_64')
+pkgdesc="Quintuplet Desktop (Q Desktop) Shell Overlays"
+arch=('any')
 url="https://sourceforge.net/projects/q-desktop/"
 license=('GPL')
-depends=('plasma-workspace' 'qt5-base' 'qt5-declarative' 'kwin')
-options=('!strip' '!zipman')
-
-source=("https://invent.kde.org/plasma/plasma-desktop/-/archive/v5.27.11/plasma-desktop-v5.27.11.tar.gz")
-sha256sums=('SKIP')
-
-build() {
-  cd "plasma-desktop-v5.27.11"
-  cmake -B build -S . \
-    -DCMAKE_INSTALL_PREFIX=/usr \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_TESTING=OFF \
-    -GNinja
-  ninja -C build
-}
+depends=('plasma-desktop' 'plasma-workspace' 'kwin')
 
 package() {
-  cd "plasma-desktop-v5.27.11"
-  DESTDIR="$pkgdir" ninja -C build install
-  
-  # Inject Q Desktop branding marker
-  install -d "$pkgdir/etc/q-desktop"
-  echo "IDENTITY=VERGIL" > "$pkgdir/etc/q-desktop/variant"
+    # Copy the custom Q Desktop files into the Arch package
+    cp -r ../rootfs/* "$pkgdir/"
+    
+    # Inject Q Desktop branding marker for Arch (Blue/Vergil)
+    install -d "$pkgdir/etc/q-desktop"
+    echo "IDENTITY=VERGIL" > "$pkgdir/etc/q-desktop/variant"
 }
