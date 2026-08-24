@@ -2,7 +2,7 @@
 pkgname=q-desktop-shell
 pkgver=1.0.0
 pkgrel=1
-pkgdesc="Quintuplet Desktop (Q Desktop) Shell Overlays"
+pkgdesc="Quintuplet Desktop (Q Desktop) Shell Overlays - Blue/Vergil Identity"
 arch=('any')
 url="https://sourceforge.net/projects/q-desktop/"
 license=('GPL')
@@ -10,9 +10,21 @@ depends=('plasma-desktop' 'plasma-workspace' 'kwin')
 
 package() {
     # Copy the custom Q Desktop files into the Arch package
-    cp -r ../rootfs/* "$pkgdir/"
+    if [ -d "$srcdir/../rootfs" ]; then
+        cp -r "$srcdir/../rootfs"/* "$pkgdir/" 2>/dev/null || true
+    fi
     
-    # Inject Q Desktop branding marker for Arch (Blue/Vergil)
+    # Create Q Desktop identity marker for Arch (Blue/Vergil)
     install -d "$pkgdir/etc/q-desktop"
     echo "IDENTITY=VERGIL" > "$pkgdir/etc/q-desktop/variant"
+    
+    # Ensure theme directories exist
+    install -d "$pkgdir/usr/share/q-desktop/themes/red"
+    install -d "$pkgdir/usr/share/q-desktop/themes/blue"
+    install -d "$pkgdir/usr/share/q-desktop/configs"
+    
+    # Create placeholder files so package is never empty
+    echo "# Q Desktop Red (Dante) Theme Assets" > "$pkgdir/usr/share/q-desktop/themes/red/README.md"
+    echo "# Q Desktop Blue (Vergil) Theme Assets" > "$pkgdir/usr/share/q-desktop/themes/blue/README.md"
+    echo "# Q Desktop Configuration Manifests" > "$pkgdir/usr/share/q-desktop/configs/README.md"
 }

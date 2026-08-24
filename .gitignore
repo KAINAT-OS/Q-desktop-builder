@@ -1,0 +1,13 @@
+# Build artifacts
+*.deb
+*.pkg.tar.zst
+*.tar.gz
+package/
+dist/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

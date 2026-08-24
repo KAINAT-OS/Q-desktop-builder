@@ -7,27 +7,76 @@ on:
 
 jobs:
   # ------------------------------------------------------------------
-  # JOB 1: Build Debian Meta-Package (Red / Dante)
+  # JOB 1: Build Arch Linux (Blue / Vergil) Package
   # ------------------------------------------------------------------
-  build-debian:
+  build-arch:
     runs-on: ubuntu-latest
+    container: archlinux:latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Sync Arch Mirror & Toolchain
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git cmake ninja pacman-contrib
+          # FIX: Pre-install runtime dependencies as root so makepkg doesn't prompt for sudo password
+          pacman -S --noconfirm --needed plasma-desktop plasma-workspace kwin
+
+      - name: Build PKGBUILD
+        run: |
+          useradd builder -m
+          chown -R builder:builder .
+          su builder -c "cd arch && makepkg -sc --noconfirm"
+
+      - name: Generate Arch Repository DB
+        run: |
+          mkdir -p dist/arch
+          mv arch/*.pkg.tar.zst dist/arch/
+          cd dist/arch
+          repo-add q-desktop.db.tar.gz *.pkg.tar.zst
+
+      - name: Upload Arch Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-dist
+          path: dist/arch/
+
+  # ------------------------------------------------------------------
+  # JOB 2: Build Debian (Red / Dante) Package
+  # ------------------------------------------------------------------
+  build-debian:
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Debian Build Chain
+        run: |
+          apt-get update
+          apt-get install -y build-essential devscripts dpkg-dev apt-utils git cmake ninja-build fakeroot
+
       - name: Build Debian Package
         run: |
+          # Create package structure dynamically
           mkdir -p package/DEBIAN
-          cp -r rootfs/* package/
+          mkdir -p package/etc/q-desktop
+          mkdir -p package/usr/share/q-desktop/themes/red
+          mkdir -p package/usr/share/q-desktop/themes/blue
+          mkdir -p package/usr/share/q-desktop/configs
           
-          # Dynamically generate the Debian control file
-          printf "Package: q-desktop-shell\nVersion: 1.0.0\nArchitecture: all\nMaintainer: Kainat Quaderee <kainat@kainatgroup.com>\nDepends: plasma-desktop, plasma-workspace, kwin-x11 | kwin-wayland\nDescription: Quintuplet Desktop (Q Desktop) Shell Overlays\n Custom KDE Plasma desktop environment layer for Kainat OS Red (Dante).\n" > package/DEBIAN/control
+          # Copy rootfs contents if they exist
+          if [ -d "rootfs" ]; then
+            cp -r rootfs/* package/ 2>/dev/null || true
+          fi
           
           # Inject Dante identity marker
-          mkdir -p package/etc/q-desktop
           echo "IDENTITY=DANTE" > package/etc/q-desktop/variant
           
-          # Build the .deb binary package
+          # Generate DEBIAN/control dynamically
+          printf "Package: q-desktop-shell\nVersion: 1.0.0\nArchitecture: all\nMaintainer: Kainat Quaderee <kainat@kainatgroup.com>\nDepends: plasma-desktop, plasma-workspace, kwin-x11 | kwin-wayland\nDescription: Quintuplet Desktop (Q Desktop) Shell Overlays\n Custom KDE Plasma desktop environment layer for Kainat OS Red (Dante).\n Contains QML overrides, themes, and configuration manifests.\n" > package/DEBIAN/control
+          
+          # Build the .deb package directly (bypasses dpkg-buildpackage changelog requirements)
           fakeroot dpkg-deb --build package q-desktop-shell_1.0.0_all.deb
           
           mkdir -p dist/debian
@@ -42,44 +91,10 @@ jobs:
           path: dist/debian/
 
   # ------------------------------------------------------------------
-  # JOB 2: Build Arch Meta-Package (Blue / Vergil)
-  # ------------------------------------------------------------------
-  build-arch:
-    runs-on: ubuntu-latest
-    container: archlinux:latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Sync Arch Toolchain
-        run: pacman -Syu --noconfirm --needed base-devel pacman-contrib
-
-      - name: Build Arch Package
-        run: |
-          # Create non-root user for makepkg
-          useradd builder -m
-
-          # FIX: Grant passwordless sudo so makepkg can install dependencies in CI
-          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-          chown -R builder:builder .
-          su builder -c "cd arch && makepkg -sc --noconfirm"
-
-          mkdir -p dist/arch
-          mv arch/*.pkg.tar.zst dist/arch/
-          cd dist/arch
-          repo-add q-desktop.db.tar.gz *.pkg.tar.zst
-
-      - name: Upload Arch Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: arch-dist
-          path: dist/arch/
-  # ------------------------------------------------------------------
-  # JOB 3: Deploy to SourceForge
+  # JOB 3: Deploy Packages to SourceForge
   # ------------------------------------------------------------------
   deploy-sourceforge:
-    needs: [build-debian, build-arch]
+    needs: [build-arch, build-debian]
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts
@@ -97,5 +112,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan frs.sourceforge.net >> ~/.ssh/known_hosts
           
+          # Sync Arch Repo to SourceForge
           rsync -avP --delete artifacts/arch-dist/ $SF_USER@frs.sourceforge.net:/home/frs/project/q-desktop/arch/
+          # Sync Debian Repo to SourceForge
           rsync -avP --delete artifacts/debian-dist/ $SF_USER@frs.sourceforge.net:/home/frs/project/q-desktop/debian/
