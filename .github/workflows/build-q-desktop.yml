@@ -39,51 +39,51 @@ jobs:
           name: arch-dist
           path: dist/arch/
 
-   # ------------------------------------------------------------------
-   # JOB 2: Build Debian (Red / Dante) Package
-   # ------------------------------------------------------------------
-   build-debian:
-     runs-on: ubuntu-latest
-     container: debian:bookworm
-     steps:
-       - name: Checkout Repository
-         uses: actions/checkout@v4
-       
-       - name: Enable Source Repositories & Install Build Chain
-         run: |
-           # Enable source repos so we can fetch KDE build dependencies
-           echo "deb-src http://deb.debian.org/debian bookworm main" >> /etc/apt/sources.list
-           apt-get update
-           apt-get install -y build-essential devscripts dpkg-dev apt-utils git cmake ninja-build wget fakeroot
-           # MAGIC TRICK: Automatically fetch all 100+ KDE Plasma build dependencies
-           apt-get build-dep -y plasma-desktop
-           
-       - name: Download Plasma 5.27 Source
-         run: |
-           wget https://download.kde.org/stable/plasma/5.27.11/plasma-desktop-5.27.11.tar.xz
-           tar -xf plasma-desktop-5.27.11.tar.xz
-           # Inject our custom debian packaging into the upstream source tree
-           cp -r debian plasma-desktop-5.27.11/
-           
-       - name: Build Debian Package
-         run: |
-           # Run dpkg-buildpackage from the SOURCE ROOT, not inside the debian folder
-           cd plasma-desktop-5.27.11
-           dpkg-buildpackage -us -uc -b
-           cd ..
-           mkdir -p dist/debian
-           mv *.deb dist/debian/ || true
-           
-       - name: Generate Debian Index
-         run: |
-           cd dist/debian
-           dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
-           
-       - name: Upload Debian Artifacts
-         uses: actions/upload-artifact@v4
-         with:
-           name: debian-dist
-           path: dist/debian/
+ # ------------------------------------------------------------------
+ # JOB 2: Build Debian (Red / Dante) Package
+ # ------------------------------------------------------------------
+ build-debian:
+   runs-on: ubuntu-latest
+   container: debian:bookworm
+   steps:
+     - name: Checkout Repository
+       uses: actions/checkout@v4
+     
+     - name: Enable Source Repositories & Install Build Chain
+       run: |
+         # Enable source repos so we can fetch KDE build dependencies
+         echo "deb-src http://deb.debian.org/debian bookworm main" >> /etc/apt/sources.list
+         apt-get update
+         apt-get install -y build-essential devscripts dpkg-dev apt-utils git cmake ninja-build wget fakeroot
+         # MAGIC TRICK: Automatically fetch all 100+ KDE Plasma build dependencies
+         apt-get build-dep -y plasma-desktop
+         
+     - name: Download Plasma 5.27 Source
+       run: |
+         wget https://download.kde.org/stable/plasma/5.27.11/plasma-desktop-5.27.11.tar.xz
+         tar -xf plasma-desktop-5.27.11.tar.xz
+         # Inject our custom debian packaging into the upstream source tree
+         cp -r debian plasma-desktop-5.27.11/
+         
+     - name: Build Debian Package
+       run: |
+         # Run dpkg-buildpackage from the SOURCE ROOT, not inside the debian folder
+         cd plasma-desktop-5.27.11
+         dpkg-buildpackage -us -uc -b
+         cd ..
+         mkdir -p dist/debian
+         mv *.deb dist/debian/ || true
+         
+     - name: Generate Debian Index
+       run: |
+         cd dist/debian
+         dpkg-scanpackages . /dev/null | gzip -9c > Packages.gz
+         
+     - name: Upload Debian Artifacts
+       uses: actions/upload-artifact@v4
+       with:
+         name: debian-dist
+         path: dist/debian/
 
   # ------------------------------------------------------------------
   # JOB 3: Deploy Packages to SourceForge
